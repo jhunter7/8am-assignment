@@ -118,8 +118,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          args: --severity-threshold=high
-        working-directory: ./app
+          args: --severity-threshold=high ./app/
 
   deploy-staging:
     name: Deploy to Staging
