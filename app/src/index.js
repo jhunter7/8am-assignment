@@ -290,20 +290,24 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-// Start server
-const server = app.listen(port, '0.0.0.0', () => {
-  logger.info(`8am Web Application running on port ${port}`, {
-    port,
-    environment: process.env.NODE_ENV || 'development',
-    nodeVersion: process.version,
-    pid: process.pid,
+// Only start server if not in test mode
+let server;
+if (process.env.NODE_ENV !== 'test') {
+  server = app.listen(port, '0.0.0.0', () => {
+    logger.info(`8am Web Application running on port ${port}`, {
+      port,
+      environment: process.env.NODE_ENV || 'development',
+      nodeVersion: process.version,
+      pid: process.pid,
+    });
   });
-});
 
-// Handle server errors
-server.on('error', (error) => {
-  logger.error('Server error:', error);
-  process.exit(1);
-});
+  // Handle server errors
+  server.on('error', (error) => {
+    logger.error('Server error:', error);
+    process.exit(1);
+  });
+}
 
-module.exports = app;
+// Export both app and server for testing
+module.exports = { app, server };

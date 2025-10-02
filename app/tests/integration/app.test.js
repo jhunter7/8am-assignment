@@ -1,5 +1,5 @@
 const request = require('supertest');
-const app = require('../../src/index');
+const { app } = require('../../src/index');
 
 describe('Application Integration Tests', () => {
   describe('Error Handling', () => {
