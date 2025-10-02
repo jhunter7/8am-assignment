@@ -60,20 +60,25 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
+          cache-dependency-path: 'app/package-lock.json'
 
       - name: Install dependencies
         run: npm ci
+        working-directory: ./app
 
       - name: Run linting
         run: npm run lint
+        working-directory: ./app
 
       - name: Run unit tests
         run: npm run test:unit
+        working-directory: ./app
         env:
           NODE_ENV: test
 
       - name: Run integration tests
         run: npm run test:integration
+        working-directory: ./app
         env:
           NODE_ENV: test
           DATABASE_URL: postgresql://test:test@localhost:5432/testdb
@@ -81,11 +86,12 @@ jobs:
 
       - name: Generate test coverage
         run: npm run test:coverage
+        working-directory: ./app
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          file: ./coverage/lcov.info
+          file: ./app/coverage/lcov.info
           flags: unittests
           name: codecov-umbrella
 
@@ -160,6 +166,7 @@ jobs:
           kubectl wait --for=condition=ready pod -l app=webapp -n staging --timeout=300s
           SERVICE_URL=$(kubectl get service webapp-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
           npm run test:smoke -- --base-url=http://$SERVICE_URL
+        working-directory: ./app
 
   deploy-production:
     name: Deploy to Production
@@ -199,6 +206,7 @@ jobs:
           kubectl wait --for=condition=ready pod -l app=webapp,version=canary -n production --timeout=300s
           npm run test:validation
           kubectl patch rollout webapp-rollout -n production --type='merge' -p='{"spec":{"strategy":{"canary":{"steps":[{"setWeight":25}]}}}}'
+        working-directory: ./app
 
   cleanup:
     name: Cleanup Old Images
