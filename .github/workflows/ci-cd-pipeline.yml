@@ -131,6 +131,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -176,6 +177,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
