@@ -1,0 +1,97 @@
+# Monitoring Stack Configuration
+# Prometheus, Grafana, and Jaeger deployment
+
+NAMESPACE: monitoring
+  LABELS:
+    - tier: monitoring
+    - component: observability
+
+PROMETHEUS:
+  REPLICAS: 1
+  PORTS:
+    - web: 9090
+  RESOURCES:
+    requests: 1Gi memory, 500m CPU
+    limits: 2Gi memory, 1000m CPU
+  STORAGE:
+    - size: 50Gi
+    - class: fast-ssd
+  CONFIGURATION:
+    - scrape_interval: 15s
+    - evaluation_interval: 15s
+    - retention: 15d
+  SECURITY:
+    - runAsNonRoot: true
+    - readOnlyRootFilesystem: true
+
+GRAFANA:
+  REPLICAS: 1
+  PORTS:
+    - web: 3000
+  RESOURCES:
+    requests: 256Mi memory, 100m CPU
+    limits: 512Mi memory, 200m CPU
+  CONFIGURATION:
+    - admin_user: admin
+    - admin_password: [from-secret]
+    - datasource: prometheus
+  SECURITY:
+    - runAsNonRoot: true
+    - readOnlyRootFilesystem: true
+
+JAEGER:
+  REPLICAS: 1
+  PORTS:
+    - web: 16686
+    - grpc: 14250
+  RESOURCES:
+    requests: 512Mi memory, 250m CPU
+    limits: 1Gi memory, 500m CPU
+  STORAGE:
+    - type: elasticsearch
+    - host: elasticsearch-service.monitoring.svc.cluster.local
+    - port: 9200
+  SECURITY:
+    - runAsNonRoot: true
+    - readOnlyRootFilesystem: true
+
+SERVICES:
+  PROMETHEUS:
+    TYPE: ClusterIP
+    PORTS: 9090
+    SELECTOR: app=prometheus
+  
+  GRAFANA:
+    TYPE: ClusterIP
+    PORTS: 3000
+    SELECTOR: app=grafana
+  
+  JAEGER:
+    TYPE: ClusterIP
+    PORTS: 16686
+    SELECTOR: app=jaeger
+
+INGRESS:
+  PROMETHEUS:
+    HOST: prometheus.8am.com
+    TLS: enabled
+  
+  GRAFANA:
+    HOST: grafana.8am.com
+    TLS: enabled
+  
+  JAEGER:
+    HOST: jaeger.8am.com
+    TLS: enabled
+
+CONFIGURATION:
+  ALERTING:
+    - alertmanager_enabled: true
+    - slack_webhook: [from-secret]
+    - email_smtp: [from-secret]
+  
+  DASHBOARDS:
+    - kubernetes-cluster
+    - application-metrics
+    - infrastructure-metrics
+    - business-metrics

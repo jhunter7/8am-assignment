@@ -1,0 +1,199 @@
+# Argo Rollouts Configuration
+# Canary deployment strategy with automated validation
+
+NAMESPACE: argo-rollouts
+  LABELS:
+    - linkerd-injection: enabled
+    - tier: deployment
+
+CONTROLLER:
+  REPLICAS: 1
+  PORTS:
+    - metrics: 8090
+  NAMESPACES: [production, staging]
+  RESOURCES:
+    requests: 128Mi memory, 100m CPU
+    limits: 256Mi memory, 200m CPU
+  SECURITY:
+    - runAsNonRoot: true
+    - readOnlyRootFilesystem: true
+
+ROLLOUT: webapp-rollout
+  NAMESPACE: production
+  REPLICAS: 10
+  STRATEGY: canary
+  
+  CANARY_STEPS:
+    - SET_WEIGHT: 10
+      PAUSE: 5m
+      ANALYSIS:
+        TEMPLATES: [success-rate]
+        ARGS:
+          - service-name: webapp-service
+    
+    - SET_WEIGHT: 25
+      PAUSE: 5m
+      ANALYSIS:
+        TEMPLATES: [success-rate]
+        ARGS:
+          - service-name: webapp-service
+    
+    - SET_WEIGHT: 50
+      PAUSE: 5m
+      ANALYSIS:
+        TEMPLATES: [success-rate]
+        ARGS:
+          - service-name: webapp-service
+    
+    - SET_WEIGHT: 75
+      PAUSE: 5m
+      ANALYSIS:
+        TEMPLATES: [success-rate]
+        ARGS:
+          - service-name: webapp-service
+    
+    - SET_WEIGHT: 100
+      ANALYSIS:
+        TEMPLATES: [success-rate]
+        ARGS:
+          - service-name: webapp-service
+
+  CANARY_SERVICE: webapp-canary
+  STABLE_SERVICE: webapp-stable
+  
+  TRAFFIC_ROUTING:
+    TYPE: linkerd
+    STABLE_SERVICE: webapp-stable
+    CANARY_SERVICE: webapp-canary
+
+  ROLLBACK_WINDOW:
+    REVISIONS: 5
+  
+  SCALE_DOWN_DELAY: 30s
+  SCALE_DOWN_REVISION_LIMIT: 2
+
+  SELECTOR: app=webapp
+  
+  TEMPLATE:
+    METADATA:
+      LABELS: app=webapp
+      ANNOTATIONS:
+        - linkerd.io/inject: enabled
+        - prometheus.io/scrape: true
+        - prometheus.io/port: 8080
+    
+    CONTAINER_SPEC:
+      IMAGE: ghcr.io/8am/webapp:latest
+      PORTS:
+        - http: 8080
+        - management: 8081
+      ENVIRONMENT:
+        - SPRING_PROFILES_ACTIVE: production
+        - DATABASE_URL: [from-secret]
+        - REDIS_URL: [from-secret]
+        - API_KEY: [from-secret]
+      RESOURCES:
+        requests: 512Mi memory, 250m CPU
+        limits: 1Gi memory, 500m CPU
+      HEALTH_CHECKS:
+        - liveness: /actuator/health/liveness
+        - readiness: /actuator/health/readiness
+      SECURITY:
+        - runAsNonRoot: true
+        - readOnlyRootFilesystem: true
+        - noPrivilegeEscalation: true
+
+ANALYSIS_TEMPLATES:
+  SUCCESS_RATE:
+    NAME: success-rate
+    NAMESPACE: production
+    METRICS:
+      - NAME: success-rate
+        SUCCESS_CONDITION: result[0] >= 0.95
+        PROVIDER: prometheus
+        QUERY: |
+          sum(rate(http_requests_total{service="{{args.service-name}}",status!~"5.."}[5m])) /
+          sum(rate(http_requests_total{service="{{args.service-name}}"}[5m]))
+  
+  LATENCY:
+    NAME: latency
+    NAMESPACE: production
+    METRICS:
+      - NAME: latency
+        SUCCESS_CONDITION: result[0] <= 0.5
+        PROVIDER: prometheus
+        QUERY: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket{service="{{args.service-name}}"}[5m])) by (le)
+          )
+  
+  ERROR_RATE:
+    NAME: error-rate
+    NAMESPACE: production
+    METRICS:
+      - NAME: error-rate
+        SUCCESS_CONDITION: result[0] <= 0.01
+        PROVIDER: prometheus
+        QUERY: |
+          sum(rate(http_requests_total{service="{{args.service-name}}",status=~"5.."}[5m])) /
+          sum(rate(http_requests_total{service="{{args.service-name}}"}[5m]))
+
+SERVICES:
+  STABLE:
+    NAME: webapp-stable
+    NAMESPACE: production
+    TYPE: ClusterIP
+    PORTS: 80 -> 8080
+    SELECTOR: app=webapp, rollouts-pod-template-hash=stable
+  
+  CANARY:
+    NAME: webapp-canary
+    NAMESPACE: production
+    TYPE: ClusterIP
+    PORTS: 80 -> 8080
+    SELECTOR: app=webapp, rollouts-pod-template-hash=canary
+
+INGRESS: webapp-ingress
+  NAMESPACE: production
+  HOST: webapp.8am.com
+  TLS: enabled (Let's Encrypt)
+  ANNOTATIONS:
+    - nginx.ingress.kubernetes.io/ssl-redirect: true
+    - nginx.ingress.kubernetes.io/rate-limit: 100/minute
+    - nginx.ingress.kubernetes.io/proxy-body-size: 10m
+    - nginx.ingress.kubernetes.io/canary: true
+    - nginx.ingress.kubernetes.io/canary-weight: 10
+  BACKEND: webapp-stable:80
+
+HORIZONTAL_POD_AUTOSCALER: webapp-hpa
+  NAMESPACE: production
+  TARGET: webapp-rollout
+  MIN_REPLICAS: 5
+  MAX_REPLICAS: 50
+  METRICS:
+    - CPU utilization: 70%
+    - Memory utilization: 80%
+    - HTTP requests per second: 100
+
+DEPLOYMENT_FEATURES:
+  - Gradual traffic shifting (10% -> 25% -> 50% -> 75% -> 100%)
+  - Automated validation at each stage
+  - Automatic rollback on failure
+  - Traffic splitting via Linkerd
+  - Prometheus-based metrics validation
+  - Health check integration
+  - Resource scaling based on demand
+
+VALIDATION_CRITERIA:
+  SUCCESS_RATE: >= 95%
+  LATENCY: <= 500ms (95th percentile)
+  ERROR_RATE: <= 1%
+  RESOURCE_USAGE: Within defined limits
+  HEALTH_CHECKS: All passing
+
+ROLLBACK_TRIGGERS:
+  - Health check failures
+  - Metrics threshold breaches
+  - Manual intervention
+  - Analysis template failures
+  - Resource constraints

@@ -1,0 +1,69 @@
+# Linkerd Service Mesh Installation
+# Pseudo-code configuration for Linkerd deployment
+
+NAMESPACE: linkerd
+  LABELS:
+    - linkerd-injection: enabled
+    - tier: service-mesh
+
+CONTROLLER:
+  REPLICAS: 1
+  PORTS:
+    - api: 8085
+    - metrics: 9995
+  RESOURCES:
+    requests: 100m CPU, 50Mi memory
+    limits: 200m CPU, 100Mi memory
+  SECURITY:
+    - runAsNonRoot: true
+    - readOnlyRootFilesystem: true
+
+PROXY_INJECTOR:
+  REPLICAS: 1
+  PORTS:
+    - webhook: 443
+  RESOURCES:
+    requests: 100m CPU, 50Mi memory
+    limits: 200m CPU, 100Mi memory
+
+IDENTITY:
+  REPLICAS: 1
+  PORTS:
+    - grpc: 8080
+  RESOURCES:
+    requests: 100m CPU, 50Mi memory
+    limits: 200m CPU, 100Mi memory
+
+DESTINATION:
+  REPLICAS: 1
+  PORTS:
+    - grpc: 8086
+  RESOURCES:
+    requests: 100m CPU, 50Mi memory
+    limits: 200m CPU, 100Mi memory
+
+PROXY:
+  IMAGE: gcr.io/linkerd-io/proxy:stable-2.12.4
+  PORTS:
+    - inbound: 4143
+    - outbound: 4140
+    - admin: 4191
+  RESOURCES:
+    requests: 100m CPU, 20Mi memory
+    limits: 200m CPU, 100Mi memory
+
+CONFIGURATION:
+  TRUST_ANCHOR: [auto-generated]
+  IDENTITY_ISSUER: [auto-generated]
+  PROXY_INJECTION: enabled
+  AUTO_INJECT: enabled
+  SKIP_INBOUND_PORTS: 4190,4191
+  SKIP_OUTBOUND_PORTS: 443,587,3306,5432,6379,9092
+
+MONITORING:
+  METRICS:
+    - prometheus.io/scrape: true
+    - prometheus.io/port: 9995
+  DASHBOARD:
+    - port: 8084
+    - replicas: 1

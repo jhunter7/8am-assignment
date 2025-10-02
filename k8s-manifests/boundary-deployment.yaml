@@ -1,0 +1,68 @@
+# HashiCorp Boundary Deployment
+# Pseudo-code configuration for secure access management
+
+NAMESPACE: boundary
+  LABELS:
+    - app: boundary
+    - tier: access-management
+
+CONTROLLER:
+  REPLICAS: 3
+  PORTS:
+    - api: 9200
+    - cluster: 9201
+  RESOURCES:
+    requests: 500m CPU, 512Mi memory
+    limits: 1000m CPU, 1Gi memory
+  ENVIRONMENT:
+    - BOUNDARY_ADDR: https://boundary.8am.com
+    - BOUNDARY_AUTH_METHOD_ID: [from-secret]
+    - BOUNDARY_PASSWORD: [from-secret]
+  SECURITY:
+    - runAsNonRoot: true
+    - readOnlyRootFilesystem: true
+
+WORKER:
+  REPLICAS: 2
+  PORTS:
+    - proxy: 9202
+    - ops: 9203
+  RESOURCES:
+    requests: 250m CPU, 256Mi memory
+    limits: 500m CPU, 512Mi memory
+  ENVIRONMENT:
+    - BOUNDARY_ADDR: https://boundary.8am.com
+    - BOUNDARY_WORKER_AUTH_METHOD: [from-secret]
+    - BOUNDARY_WORKER_AUTH_TOKEN: [from-secret]
+  SECURITY:
+    - runAsNonRoot: true
+    - readOnlyRootFilesystem: true
+
+SERVICE:
+  TYPE: ClusterIP
+  PORTS:
+    - api: 9200
+    - cluster: 9201
+  SELECTOR: app=boundary-controller
+
+INGRESS:
+  HOST: boundary.8am.com
+  TLS: enabled
+  ANNOTATIONS:
+    - nginx.ingress.kubernetes.io/ssl-redirect: true
+    - nginx.ingress.kubernetes.io/rate-limit: 10/minute
+
+CONFIGURATION:
+  DATABASE:
+    - HOST: postgresql-service.database.svc.cluster.local
+    - PORT: 5432
+    - DATABASE: boundary
+    - USERNAME: [from-secret]
+    - PASSWORD: [from-secret]
+  ENCRYPTION:
+    - KMS_TYPE: awskms
+    - KMS_KEY_ID: [from-secret]
+  AUTHENTICATION:
+    - PRIMARY_AUTH_METHOD: password
+    - LDAP_ENABLED: true
+    - OIDC_ENABLED: true
