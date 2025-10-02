@@ -20,18 +20,18 @@ const httpRequestDuration = new client.Histogram({
   name: 'http_request_duration_seconds',
   help: 'Duration of HTTP requests in seconds',
   labelNames: ['method', 'route', 'status_code'],
-  buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10]
+  buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10],
 });
 
 const httpRequestTotal = new client.Counter({
   name: 'http_requests_total',
   help: 'Total number of HTTP requests',
-  labelNames: ['method', 'route', 'status_code']
+  labelNames: ['method', 'route', 'status_code'],
 });
 
 const activeConnections = new client.Gauge({
   name: 'active_connections',
-  help: 'Number of active connections'
+  help: 'Number of active connections',
 });
 
 register.registerMetric(httpRequestDuration);
@@ -44,53 +44,53 @@ const logger = winston.createLogger({
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),
-    winston.format.json()
+    winston.format.json(),
   ),
   defaultMeta: { service: '8am-webapp' },
   transports: [
     new winston.transports.Console({
       format: winston.format.combine(
         winston.format.colorize(),
-        winston.format.simple()
-      )
+        winston.format.simple(),
+      ),
     }),
-    new winston.transports.File({ 
-      filename: 'logs/error.log', 
-      level: 'error' 
+    new winston.transports.File({
+      filename: 'logs/error.log',
+      level: 'error',
     }),
-    new winston.transports.File({ 
-      filename: 'logs/combined.log' 
-    })
-  ]
+    new winston.transports.File({
+      filename: 'logs/combined.log',
+    }),
+  ],
 });
 
 // Middleware
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
+      defaultSrc: ['self'],
+      styleSrc: ['self', 'unsafe-inline'],
+      scriptSrc: ['self'],
+      imgSrc: ['self', 'data:', 'https:'],
     },
   },
   hsts: {
     maxAge: 31536000,
     includeSubDomains: true,
-    preload: true
-  }
+    preload: true,
+  },
 }));
 
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
-  credentials: true
+  credentials: true,
 }));
 
 app.use(compression());
 app.use(morgan('combined', {
   stream: {
-    write: (message) => logger.info(message.trim())
-  }
+    write: (message) => logger.info(message.trim()),
+  },
 }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -100,31 +100,31 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use((req, res, next) => {
   const start = Date.now();
   activeConnections.inc();
-  
+
   res.on('finish', () => {
     const duration = (Date.now() - start) / 1000;
     const route = req.route?.path || req.path;
-    
+
     httpRequestDuration
       .labels(req.method, route, res.statusCode)
       .observe(duration);
-    
+
     httpRequestTotal
       .labels(req.method, route, res.statusCode)
       .inc();
-    
+
     activeConnections.dec();
-    
+
     logger.info('HTTP Request', {
       method: req.method,
       url: req.url,
       statusCode: res.statusCode,
       duration: `${duration}s`,
       userAgent: req.get('User-Agent'),
-      ip: req.ip
+      ip: req.ip,
     });
   });
-  
+
   next();
 });
 
@@ -137,9 +137,9 @@ app.get('/health', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
     version: process.env.npm_package_version || '1.0.0',
     memory: process.memoryUsage(),
-    pid: process.pid
+    pid: process.pid,
   };
-  
+
   res.status(200).json(healthCheck);
 });
 
@@ -156,10 +156,10 @@ app.get('/health/readiness', (req, res) => {
     checks: {
       database: 'connected',
       cache: 'connected',
-      messaging: 'connected'
-    }
+      messaging: 'connected',
+    },
   };
-  
+
   res.status(200).json(readiness);
 });
 
@@ -184,8 +184,8 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       metrics: '/metrics',
-      api: '/api'
-    }
+      api: '/api',
+    },
   });
 });
 
@@ -197,14 +197,14 @@ app.get('/api/status', (req, res) => {
     dependencies: {
       database: 'connected',
       cache: 'connected',
-      messaging: 'connected'
+      messaging: 'connected',
     },
     features: {
       authentication: 'enabled',
       rate_limiting: 'enabled',
       monitoring: 'enabled',
-      security: 'enabled'
-    }
+      security: 'enabled',
+    },
   });
 });
 
@@ -214,7 +214,7 @@ app.get('/api/version', (req, res) => {
     version: '1.0.0',
     build: process.env.BUILD_NUMBER || 'local',
     commit: process.env.GIT_COMMIT || 'unknown',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -229,57 +229,55 @@ app.get('/api/v1/users', (req, res) => {
     users: [],
     total: 0,
     page: 1,
-    limit: 10
+    limit: 10,
   });
 });
 
 app.post('/api/v1/users', (req, res) => {
   const { name, email } = req.body;
-  
+
   if (!name || !email) {
     return res.status(400).json({
       error: 'Bad Request',
-      message: 'Name and email are required'
+      message: 'Name and email are required',
     });
   }
-  
-  res.status(201).json({
+
+  return res.status(201).json({
     id: Math.random().toString(36).substr(2, 9),
     name,
     email,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
   });
 });
 
 // Error handling middleware
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   logger.error('Application error:', {
     error: err.message,
     stack: err.stack,
     url: req.url,
     method: req.method,
     ip: req.ip,
-    userAgent: req.get('User-Agent')
+    userAgent: req.get('User-Agent'),
   });
-  
-  res.status(err.status || 500).json({
+
+  return res.status(err.status || 500).json({
     error: 'Internal server error',
     message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',
     timestamp: new Date().toISOString(),
-    requestId: req.headers['x-request-id'] || 'unknown'
+    requestId: req.headers['x-request-id'] || 'unknown',
   });
 });
 
 // 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    error: 'Not found',
-    message: 'The requested resource was not found',
-    path: req.originalUrl,
-    method: req.method,
-    timestamp: new Date().toISOString()
-  });
-});
+app.use('*', (req, res) => res.status(404).json({
+  error: 'Not found',
+  message: 'The requested resource was not found',
+  path: req.originalUrl,
+  method: req.method,
+  timestamp: new Date().toISOString(),
+}));
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
@@ -298,7 +296,7 @@ const server = app.listen(port, '0.0.0.0', () => {
     port,
     environment: process.env.NODE_ENV || 'development',
     nodeVersion: process.version,
-    pid: process.pid
+    pid: process.pid,
   });
 });
 
